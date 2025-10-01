@@ -1,0 +1,3 @@
+uniprot_id,gene,status,ligands,ions,json_file
+P33527,ABCC1,OK,ADP;ADP,,ABCC1_P33527_ADP2.json
+P33527,ABCC1,OK,ATP;ATP,MG;MG,ABCC1_P33527_ATP2_MG2.json
