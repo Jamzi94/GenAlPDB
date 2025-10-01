@@ -28,7 +28,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Improved regex patterns for better matching
+# Improved regex patterns for better matching of AlphaFold 3 output
+# These patterns extract timing and resource information from log files
 PATTERN_PIPELINE = re.compile(r'Running data pipeline.*?took ([\d\.]+) seconds')
 PATTERN_INFERENCE = re.compile(r'Running model inference.*?took ([\d\.]+) seconds')
 PATTERN_TOTAL = re.compile(r'Running fold job.*?Fold job.*?done', re.DOTALL)
@@ -40,11 +41,18 @@ def parse_runtime_from_logs(logs_dir: Optional[str] = None) -> pd.DataFrame:
     """
     Parses SLURM output files to extract runtime information.
     
+    This function scans log files from SLURM job outputs and extracts:
+    - Pipeline execution time (data preparation)
+    - Inference execution time (model prediction)
+    - Total execution time
+    - GPU count and memory usage (if available)
+    - Token count (sequence length indicator)
+    
     Args:
-        logs_dir: Directory containing SLURM output files
+        logs_dir: Directory containing SLURM output files (defaults to logs/)
         
     Returns:
-        DataFrame with parsed runtime information
+        DataFrame with parsed runtime information for all jobs
     """
     # Get the root directory (parent of the script's directory)
     root = pathlib.Path(__file__).resolve().parent.parent
@@ -76,10 +84,10 @@ def parse_runtime_from_logs(logs_dir: Optional[str] = None) -> pd.DataFrame:
         try:
             content = f.read_text()
             
-            # Extract job name from filename
+            # Extract job name from filename (without extension)
             jobname = f.stem
             
-            # Extract runtime information using regex
+            # Extract runtime information using regex patterns
             pipeline_match = PATTERN_PIPELINE.search(content)
             pipeline_s = float(pipeline_match.group(1)) if pipeline_match else None
             
@@ -134,9 +142,11 @@ def parse_runtime_from_logs(logs_dir: Optional[str] = None) -> pd.DataFrame:
         
         # Add derived metrics if possible
         if 'gpu_count' in df.columns and 'total_s' in df.columns:
+            # Calculate GPU-seconds (total GPU time used)
             df['gpu_seconds'] = df['gpu_count'] * df['total_s']
             
         if 'token_count' in df.columns and 'total_s' in df.columns:
+            # Calculate tokens per second (processing speed)
             df['tokens_per_second'] = df['token_count'] / df['total_s']
         
         return df

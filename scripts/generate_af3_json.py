@@ -72,24 +72,33 @@ def setup_output_directory(output_dir: pathlib.Path) -> None:
     Sets up the output directory, creating it if it doesn't exist
     and optionally clearing its contents after user confirmation.
     
+    This function ensures the output directory is ready for JSON file generation.
+    If the directory already contains files, it prompts the user for confirmation
+    before deleting existing contents to avoid accidental data loss.
+    
     Args:
-        output_dir: Path to the output directory
+        output_dir: Path to the output directory where JSON files will be created
     """
+    # Create the output directory if it doesn't exist
     output_dir.mkdir(exist_ok=True)
     
+    # Check if the directory contains any files or subdirectories
     if output_dir.exists() and any(output_dir.iterdir()):
+        # Prompt user for confirmation before deleting existing files
         choice = input(f"The directory '{output_dir}' is not empty. Do you want to delete its contents? (y/N): ")
         if choice.strip().lower() == 'y':
+            # Delete all contents in the directory
             for entry in output_dir.iterdir():
                 try:
                     if entry.is_dir():
-                        shutil.rmtree(entry)
+                        shutil.rmtree(entry)  # Recursively delete subdirectories
                     else:
-                        entry.unlink()
+                        entry.unlink()  # Delete individual files
                 except Exception as e:
                     logger.error(f"Error deleting {entry}: {e}")
             logger.info(f"Contents of '{output_dir}' have been deleted.")
         else:
+            # User chose to keep existing contents
             logger.info(f"Contents of '{output_dir}' are kept.")
 
 # ------------------------------------------------------------------------
@@ -135,24 +144,41 @@ def parse_compound_field(field: str) -> List[str]:
     """
     Parses a compound string like "ATP:2;MG:2" into a list: ["ATP","ATP","MG","MG"]
     
+    This function processes ligand and ion specifications from the template CSV,
+    expanding quantities into individual entries. Multiple compounds are separated
+    by semicolons, and quantities are specified after a colon.
+    
+    Examples:
+        "ATP:2" -> ["ATP", "ATP"]
+        "ATP:2;MG:1" -> ["ATP", "ATP", "MG"]
+        "ADP" -> ["ADP"]  (quantity defaults to 1)
+    
     Args:
-        field: Compound string to parse
+        field: Compound string to parse (e.g., "ATP:2;MG:2")
         
     Returns:
-        List of individual compound codes
+        List of individual compound codes with quantities expanded
     """
     items: List[str] = []
+    
+    # Handle empty or NaN fields
     if pd.isna(field) or not field:
         return items
     
+    # Split by semicolon to get individual compound specifications
     for entry in str(field).split(";"):
         if not entry.strip():
             continue
+        
         try:
+            # Split by colon to separate compound name from quantity
             name, count = entry.split(":")
+            # Expand: add the compound 'count' times to the list
             items.extend([name.strip()] * int(count.strip()))
         except ValueError:
+            # No colon found, assume quantity is 1
             items.append(entry.strip())
+    
     return items
 
 # ------------------------------------------------------------------------
@@ -161,47 +187,55 @@ def create_ligand_sequences_fallback(ligand_list: List[str], ion_list: List[str]
     """
     Create ligand sequences using traditional CCD codes (fallback when SMILES not available).
     
+    This function is used when the SMILES database or ligand resolver is not available.
+    All ligands and ions are treated as CCD (Chemical Component Dictionary) codes,
+    which is the standard format used by the PDB.
+    
     Args:
-        ligand_list: List of ligand identifiers
-        ion_list: List of ion identifiers
-        available_chain_ids: List of available chain IDs
+        ligand_list: List of ligand identifiers (will be treated as CCD codes)
+        ion_list: List of ion identifiers (will be treated as CCD codes)
+        available_chain_ids: List of available chain IDs to assign to ligands/ions
         
     Returns:
-        Tuple of (sequences list, updated available_chain_ids)
+        Tuple of (sequences list with ligand entries, updated available_chain_ids)
     """
     sequences = []
     
-    # Process ligands
+    # Process ligands - count duplicates and create entries
     lig_counts = Counter(ligand_list)
     for lig, count in sorted(lig_counts.items()):
         for i in range(count):
             if not available_chain_ids:
                 logger.warning(f"Warning: Ran out of available chain IDs. Skipping remaining ligands/ions.")
                 break
-                
+            
+            # Assign the next available chain ID
             chain_id = available_chain_ids.pop(0)
             
+            # Create ligand entry using CCD code format
             sequences.append({
                 "ligand": {
                     "id": chain_id,
-                    "ccdCodes": [lig.upper()]
+                    "ccdCodes": [lig.upper()]  # CCD codes are typically uppercase
                 }
             })
 
-    # Process ions
+    # Process ions - always treated as CCD codes (e.g., MG, CA, ZN)
     ion_counts = Counter(ion_list)
     for ion, count in sorted(ion_counts.items()):
         for i in range(count):
             if not available_chain_ids:
                 logger.warning(f"Warning: Ran out of available chain IDs. Skipping remaining ions.")
                 break
-                
+            
+            # Assign the next available chain ID
             chain_id = available_chain_ids.pop(0)
             
+            # Create ion entry using CCD code format
             sequences.append({
                 "ligand": {
                     "id": chain_id,
-                    "ccdCodes": [ion.upper()]
+                    "ccdCodes": [ion.upper()]  # Ion codes are typically uppercase
                 }
             })
     
@@ -213,14 +247,19 @@ def create_ligand_sequences(ligand_list: List[str], ion_list: List[str],
     """
     Create ligand sequences using the ligand resolver (with SMILES support).
     
+    This function provides intelligent ligand resolution, automatically distinguishing
+    between CCD codes (e.g., ATP, NAD) and compound names (e.g., Metformin, Aspirin).
+    Compound names are resolved to SMILES strings using the SMILES database, while
+    CCD codes are used directly.
+    
     Args:
-        ligand_list: List of ligand identifiers
-        ion_list: List of ion identifiers
-        available_chain_ids: List of available chain IDs
-        smiles_database_path: Path to the SMILES database
+        ligand_list: List of ligand identifiers (can be CCD codes or compound names)
+        ion_list: List of ion identifiers (always treated as CCD codes)
+        available_chain_ids: List of available chain IDs to assign
+        smiles_database_path: Path to the SMILES database CSV file
         
     Returns:
-        Tuple of (sequences list, updated available_chain_ids)
+        Tuple of (sequences list with ligand entries, updated available_chain_ids)
     """
     sequences = []
     
@@ -229,24 +268,27 @@ def create_ligand_sequences(ligand_list: List[str], ion_list: List[str],
         logger.info("SMILES support not available, using traditional CCD-only mode")
         return create_ligand_sequences_fallback(ligand_list, ion_list, available_chain_ids)
     
+    # Initialize the ligand resolver with SMILES database
     resolver = get_resolver(str(smiles_database_path))
     
-    # Process ligands
+    # Process ligands with intelligent resolution
     lig_counts = Counter(ligand_list)
     for lig, count in sorted(lig_counts.items()):
         for i in range(count):
             if not available_chain_ids:
                 logger.warning(f"Warning: Ran out of available chain IDs. Skipping remaining ligands/ions.")
                 break
-                
+            
+            # Assign the next available chain ID
             chain_id = available_chain_ids.pop(0)
             
-            # Resolve the ligand
+            # Resolve the ligand (determines if it's a CCD code or compound name)
             ligand_info = resolver.resolve_ligand(lig)
+            # Create the appropriate JSON structure (CCD or SMILES format)
             ligand_json = resolver.create_ligand_json(ligand_info, chain_id)
             sequences.append(ligand_json)
             
-            # Log the resolution for debugging
+            # Log the resolution for debugging and transparency
             logger.debug(f"Ligand '{lig}' resolved as {ligand_info.ligand_type}: {ligand_info.value}")
 
     # Process ions (always treated as CCD codes)
@@ -259,7 +301,8 @@ def create_ligand_sequences(ligand_list: List[str], ion_list: List[str],
                 
             chain_id = available_chain_ids.pop(0)
             
-            # Ions are always treated as CCD codes
+            # Ions are always treated as CCD codes (e.g., MG for magnesium, CA for calcium)
+            # Ions don't have SMILES representations in this context
             sequences.append({
                 "ligand": {
                     "id": chain_id,

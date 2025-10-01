@@ -34,11 +34,14 @@ def find_json_files(json_dir: pathlib.Path) -> List[pathlib.Path]:
     """
     Find all valid JSON input files in the specified directory.
     
+    This function identifies JSON files that are valid AlphaFold 3 input files,
+    excluding auxiliary files like chain mapping files which are not actual inputs.
+    
     Args:
         json_dir: Path to the directory containing JSON files
         
     Returns:
-        List of paths to valid JSON files
+        List of paths to valid JSON files suitable for AlphaFold 3 prediction
     """
     if not json_dir.exists():
         logger.error(f"JSON directory does not exist: {json_dir}")
@@ -47,6 +50,7 @@ def find_json_files(json_dir: pathlib.Path) -> List[pathlib.Path]:
     # Collect valid JSON files (excluding chain mapping files)
     valid_json_files = []
     for json_file in json_dir.glob("*.json"):
+        # Skip auxiliary files that are not actual input JSONs
         if "_chain_mapping.json" not in json_file.name:
             valid_json_files.append(json_file)
     
@@ -56,11 +60,15 @@ def extract_base_id(json_file: pathlib.Path) -> str:
     """
     Extract base ID from JSON filename (first two parts separated by _).
     
+    This function extracts a base identifier from JSON filenames to group
+    related files together. For example, "ABCC1_P33527_ATP2_MG2.json"
+    would yield "ABCC1_P33527" as the base ID.
+    
     Args:
         json_file: Path to the JSON file
         
     Returns:
-        Base ID string
+        Base ID string (e.g., "ABCC1_P33527")
     """
     base_name = json_file.stem
     parts = base_name.split('_')
@@ -72,11 +80,16 @@ def group_json_files_by_base_id(json_files: List[pathlib.Path]) -> Dict[str, Lis
     """
     Group JSON files by their base ID.
     
+    This function organizes JSON files into groups based on their base identifiers,
+    which is useful for batch processing related predictions (e.g., same protein
+    with different ligand configurations).
+    
     Args:
         json_files: List of JSON file paths
         
     Returns:
         Dictionary mapping base IDs to lists of JSON files
+        Example: {"ABCC1_P33527": [file1.json, file2.json], ...}
     """
     base_id_files = {}
     
@@ -91,6 +104,10 @@ def group_json_files_by_base_id(json_files: List[pathlib.Path]) -> Dict[str, Lis
 def submit_slurm_job(root_dir: pathlib.Path) -> bool:
     """
     Submit AlphaFold 3 jobs to SLURM using the advanced submission script.
+    
+    This function executes the SLURM job submission script (slurm_job_submit.sh)
+    which handles the creation and submission of batch jobs to the SLURM scheduler.
+    The script processes all JSON files in the af3_json directory.
     
     Args:
         root_dir: Path to the project root directory
@@ -123,7 +140,7 @@ def submit_slurm_job(root_dir: pathlib.Path) -> bool:
             text=True
         )
         
-        # Log the output
+        # Log the output for transparency
         if result.stdout:
             for line in result.stdout.strip().split('\n'):
                 logger.info(f"SLURM: {line}")

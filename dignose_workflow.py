@@ -50,6 +50,10 @@ def check_json_validity(json_dir: pathlib.Path) -> Tuple[int, int]:
     """
     Check the validity of JSON files in the specified directory.
     
+    This function scans the JSON directory and validates each file to ensure
+    it contains the required structure for AlphaFold 3 input. Valid files
+    must have 'sequences' and 'name' fields.
+    
     Args:
         json_dir: Path to the directory containing JSON files
         
@@ -63,6 +67,7 @@ def check_json_validity(json_dir: pathlib.Path) -> Tuple[int, int]:
     valid_files = 0
     
     for json_file in json_dir.glob("*.json"):
+        # Skip auxiliary files like chain mapping files
         if "_chain_mapping.json" in json_file.name:
             continue
             
@@ -72,10 +77,11 @@ def check_json_validity(json_dir: pathlib.Path) -> Tuple[int, int]:
             with open(json_file, 'r') as f:
                 data = json.load(f)
             
-            # Check for required keys
+            # Check for required keys in AlphaFold 3 JSON format
             if 'sequences' in data and 'name' in data:
                 valid_files += 1
         except:
+            # File is invalid JSON or missing required fields
             pass
     
     return total_files, valid_files
@@ -83,6 +89,10 @@ def check_json_validity(json_dir: pathlib.Path) -> Tuple[int, int]:
 def check_script_consistency(scripts_dir: pathlib.Path) -> Dict[str, bool]:
     """
     Check the consistency of script files.
+    
+    This function validates that workflow scripts are correctly configured
+    and reference the appropriate files. It checks for common misconfigurations
+    such as calling .sh files instead of .py files.
     
     Args:
         scripts_dir: Path to the scripts directory
@@ -125,7 +135,15 @@ def check_script_consistency(scripts_dir: pathlib.Path) -> Dict[str, bool]:
     return results
 
 def check_workflow_setup():
-    """Check the current workflow setup and provide diagnostic information."""
+    """
+    Check the current workflow setup and provide diagnostic information.
+    
+    This function performs a comprehensive diagnostic of the AlphaFold 3 workflow,
+    checking directory structure, configuration files, scripts, and identifying
+    common issues that may prevent the workflow from running correctly.
+    
+    It provides actionable recommendations for fixing any detected problems.
+    """
     print("=" * 60)
     print("AlphaFold 3 Workflow Diagnostic")
     print("=" * 60)

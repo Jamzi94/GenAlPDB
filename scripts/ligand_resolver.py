@@ -67,7 +67,17 @@ class LigandResolver:
         }
     
     def _load_smiles_database(self) -> None:
-        """Load the SMILES database from CSV file."""
+        """
+        Load the SMILES database from CSV file.
+        
+        This method loads compound names and their corresponding SMILES strings
+        from the configured CSV file. The database is used to resolve compound
+        names to SMILES representations for AlphaFold 3 input.
+        
+        Expected CSV format:
+        - Required columns: compound_name, smiles
+        - Optional column: source_sheet (for tracking data sources)
+        """
         if not os.path.exists(self.smiles_database_path):
             logger.warning(f"SMILES database not found at {self.smiles_database_path}")
             logger.warning("Only CCD codes will be supported.")
@@ -87,6 +97,7 @@ class LigandResolver:
                 compound_name = str(row['compound_name']).strip()
                 smiles = str(row['smiles']).strip()
                 
+                # Only add valid entries (non-empty and not 'nan')
                 if compound_name and smiles and smiles != 'nan':
                     # Store both original case and lowercase for flexible lookup
                     self.smiles_db[compound_name] = smiles
@@ -103,6 +114,16 @@ class LigandResolver:
         """
         Determine if an identifier is likely a CCD code based on patterns.
         
+        CCD (Chemical Component Dictionary) codes are standardized identifiers
+        used by the Protein Data Bank (PDB) for ligands, ions, and small molecules.
+        
+        Common patterns for CCD codes:
+        - Short length (typically 2-6 characters)
+        - All uppercase letters
+        - May contain numbers (e.g., "3PG", "ADP")
+        - May contain hyphens (e.g., "LIG-1337")
+        - Common examples: ATP, NAD, MG, CA, ZN, SO4
+        
         Args:
             identifier: The identifier to check
             
@@ -115,21 +136,15 @@ class LigandResolver:
         if identifier.upper() in self.common_ccd_codes:
             return True
         
-        # CCD code patterns:
-        # - Short (typically 2-6 characters)
-        # - Often all uppercase
-        # - May contain numbers
-        # - May contain hyphens (e.g., LIG-1337)
-        
         # Very short identifiers are likely CCD codes
         if len(identifier) <= 3:
             return True
         
-        # All uppercase with possible numbers/hyphens
+        # All uppercase with possible numbers/hyphens (typical CCD pattern)
         if re.match(r'^[A-Z0-9\-]+$', identifier):
             return True
         
-        # Pattern like LIG-#### or similar
+        # Pattern like LIG-#### or similar (custom ligand codes)
         if re.match(r'^[A-Z]{2,4}-\d+$', identifier):
             return True
         
@@ -151,11 +166,19 @@ class LigandResolver:
         """
         Resolve a ligand identifier to either a CCD code or SMILES string.
         
+        This is the main resolution method that intelligently determines whether
+        an identifier is a known compound name (resolves to SMILES) or a CCD code.
+        
+        Resolution priority:
+        1. Check if identifier exists in SMILES database (compound name)
+        2. Check if identifier matches CCD code patterns
+        3. Fallback to treating as CCD code for compatibility
+        
         Args:
-            identifier: The ligand identifier to resolve
+            identifier: The ligand identifier to resolve (e.g., "Metformin", "ATP", "MG")
             
         Returns:
-            LigandInfo object with resolution details
+            LigandInfo object with resolution details including type and value
         """
         identifier = identifier.strip()
         
@@ -180,7 +203,7 @@ class LigandResolver:
                 original_name=identifier
             )
         
-        # Fallback: treat as CCD code (for compatibility)
+        # Fallback: treat as CCD code (for compatibility with unknown identifiers)
         logger.warning(f"Unknown identifier '{identifier}', treating as CCD code")
         return LigandInfo(
             identifier=identifier,

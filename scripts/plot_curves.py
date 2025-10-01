@@ -33,6 +33,15 @@ def create_performance_plots(excel_path: Optional[str] = None, output_dir: Optio
     """
     Creates performance visualization plots from benchmark results.
     
+    This function generates publication-quality plots showing the relationship
+    between computational resources (GPU count) and performance metrics
+    (execution time, memory usage). The plots help analyze scalability
+    and resource efficiency of AlphaFold 3 predictions.
+    
+    Generated plots:
+    - time_vs_gpu.png/pdf/svg: Execution time vs GPU count
+    - memory_vs_gpu.png: Memory usage vs GPU count (if available)
+    
     Args:
         excel_path: Path to the Excel file with benchmark results
         output_dir: Directory where plots will be saved
@@ -85,10 +94,10 @@ def create_performance_plots(excel_path: Optional[str] = None, output_dir: Optio
         logger.info("Creating Time vs GPU plot")
         plt.figure(figsize=(10, 6))
         
-        # Create scatter plot with larger points and labels
+        # Create scatter plot with larger points and transparency for overlapping points
         plt.scatter(df['gpu'], df['elapsed_s'], s=100, alpha=0.7)
         
-        # Add title and labels
+        # Add title and labels with appropriate font sizes
         plt.title('AlphaFold 3 Performance: Execution Time vs GPU Count', fontsize=14)
         plt.xlabel('Number of GPUs', fontsize=12)
         plt.ylabel('Execution Time (seconds)', fontsize=12)
@@ -96,17 +105,17 @@ def create_performance_plots(excel_path: Optional[str] = None, output_dir: Optio
         # Add grid for better readability
         plt.grid(True, linestyle='--', alpha=0.7)
         
-        # Improve aesthetics
+        # Improve aesthetics with tight layout
         plt.tight_layout()
         
-        # Save in multiple formats
+        # Save in multiple formats for different use cases
         plot_path_png = output_dir / 'time_vs_gpu.png'
         plot_path_pdf = output_dir / 'time_vs_gpu.pdf'
         plot_path_svg = output_dir / 'time_vs_gpu.svg'
         
-        plt.savefig(plot_path_png, dpi=300)
-        plt.savefig(plot_path_pdf)
-        plt.savefig(plot_path_svg)
+        plt.savefig(plot_path_png, dpi=300)  # High-resolution PNG
+        plt.savefig(plot_path_pdf)  # Vector format for publications
+        plt.savefig(plot_path_svg)  # Vector format for web
         
         logger.info(f"Plots saved to: {plot_path_png}, {plot_path_pdf}, {plot_path_svg}")
         
