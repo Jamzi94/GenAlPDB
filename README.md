@@ -91,6 +91,7 @@ Prepare inputs in `config/`:
 ```
 - af3_template.csv:      columns `uniprot_id`, `ligands`, `ions`
 - benchmark_config.csv:  columns `gpu`, `cpus`, `mem`, `nodes`, `partition`, `walltime`
+- smiles_database.csv:   columns `compound_name (=Simplified Molecular-Input Line-Entry System or SMILES)`, `smiles`, `source_sheet`
 ```
 
 Run the full workflow (non-SLURM orchestrator):
@@ -232,6 +233,7 @@ Préparer les entrées dans `config/` :
 ```
 - af3_template.csv :      colonnes `uniprot_id`, `ligands`, `ions`
 - benchmark_config.csv :  colonnes `gpu`, `cpus`, `mem`, `nodes`, `partition`, `walltime`
+- smiles_database.csv :   colonnes `compound_name (=Simplified Molecular-Input Line-Entry System or SMILES)`, `smiles`, `source_sheet`
 ```
 
 Lancer le workflow complet :
