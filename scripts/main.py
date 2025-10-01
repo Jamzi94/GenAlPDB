@@ -69,6 +69,11 @@ def should_regenerate_json(root: pathlib.Path, json_files: list[pathlib.Path]) -
     """
     Determine if JSON files should be regenerated based on template modification time.
     
+    This function implements intelligent change detection by comparing modification
+    timestamps. JSON files are regenerated if:
+    1. The template CSV has been modified more recently than any JSON file
+    2. The SMILES database has been modified more recently than any JSON file
+    
     Args:
         root: Root directory path
         json_files: List of existing JSON files
@@ -79,11 +84,12 @@ def should_regenerate_json(root: pathlib.Path, json_files: list[pathlib.Path]) -
     template_path = root / "config" / "af3_template.csv"
     
     if not template_path.exists():
-        return True  # No template, can't determine
+        return True  # No template exists, cannot determine - regenerate
     
     if not json_files:
-        return True  # No JSON files exist
+        return True  # No JSON files exist, need to generate
     
+    # Get template modification time
     template_mtime = get_file_modification_time(template_path)
     
     # Check if any JSON file is older than the template
@@ -108,6 +114,11 @@ def should_regenerate_json(root: pathlib.Path, json_files: list[pathlib.Path]) -
 def generate_json_files(root: pathlib.Path, force_regenerate: bool = False) -> bool:
     """
     Generate JSON files using the enhanced generator script with SMILES support.
+    
+    This function invokes the JSON generator script which:
+    - Fetches protein sequences from UniProt
+    - Resolves ligands and ions (with SMILES support if available)
+    - Creates AlphaFold 3-compatible JSON input files
     
     Args:
         root: Root directory path
